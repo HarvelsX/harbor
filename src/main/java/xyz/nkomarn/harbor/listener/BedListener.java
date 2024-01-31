@@ -39,7 +39,7 @@ public class BedListener implements Listener {
             return;
         }
 
-        Bukkit.getScheduler().runTaskLater(harbor, () -> {
+        Bukkit.getGlobalRegionScheduler().runDelayed(harbor, (task) -> {
             playerManager.setCooldown(player, Instant.now());
             harbor.getMessages().sendWorldChatMessage(event.getBed().getWorld(), messages.prepareMessage(
                     player, harbor.getConfiguration().getString("messages.chat.player-sleeping"))
@@ -53,7 +53,7 @@ public class BedListener implements Listener {
             return;
         }
 
-        Bukkit.getScheduler().runTaskLater(harbor, () -> {
+        Bukkit.getGlobalRegionScheduler().runDelayed(harbor, (task) -> {
             playerManager.setCooldown(event.getPlayer(), Instant.now());
             harbor.getMessages().sendWorldChatMessage(event.getBed().getWorld(), messages.prepareMessage(
                     event.getPlayer(), harbor.getConfiguration().getString("messages.chat.player-left-bed"))

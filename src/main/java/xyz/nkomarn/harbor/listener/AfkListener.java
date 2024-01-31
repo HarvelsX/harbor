@@ -1,5 +1,6 @@
 package xyz.nkomarn.harbor.listener;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -11,20 +12,20 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import xyz.nkomarn.harbor.Harbor;
 import xyz.nkomarn.harbor.provider.DefaultAFKProvider;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public final class AfkListener implements Listener {
     private final DefaultAFKProvider afkProvider;
     private Queue<AfkPlayer> players;
-    private PlayerMovementChecker movementChecker;
+    private ScheduledTask movementChecker;
     private final Harbor harbor;
     private boolean status;
 
@@ -42,7 +43,6 @@ public final class AfkListener implements Listener {
         if(!status) {
             status = true;
             players = new ArrayDeque<>();
-            movementChecker = new PlayerMovementChecker();
 
             // Populate the queue with any existing players
             players.addAll(Bukkit.getOnlinePlayers().stream().map((Function<Player, AfkPlayer>) AfkPlayer::new).collect(Collectors.toSet()));
@@ -52,7 +52,7 @@ public final class AfkListener implements Listener {
 
             // We want every player to get a check every 20 ticks. The runnable smooths out checking a certain
             // percentage of players over all 20 ticks. Thusly, the runnable must run on every tick
-            movementChecker.runTaskTimer(harbor, 0, 1);
+            movementChecker = Bukkit.getGlobalRegionScheduler().runAtFixedRate(harbor, new PlayerMovementChecker(), 0, 1);
 
             harbor.getLogger().info("Fallback AFK detection system is enabled");
         } else {
@@ -105,10 +105,11 @@ public final class AfkListener implements Listener {
     /**
      * Internal class for handling the task of checking player movement; Is a separate task so that we can cancel and restart it easily
      */
-    private final class PlayerMovementChecker extends BukkitRunnable {
+    private final class PlayerMovementChecker implements Consumer<ScheduledTask> {
         private double checksToMake = 0;
+
         @Override
-        public void run() {
+        public void accept(ScheduledTask task) {
             if(players.isEmpty()){
                 checksToMake = 0;
                 return;

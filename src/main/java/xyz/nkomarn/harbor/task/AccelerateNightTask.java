@@ -1,13 +1,15 @@
 package xyz.nkomarn.harbor.task;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Statistic;
 import org.bukkit.World;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import xyz.nkomarn.harbor.Harbor;
 import xyz.nkomarn.harbor.util.Config;
 
-public class AccelerateNightTask extends BukkitRunnable {
+import java.util.function.Consumer;
+
+public class AccelerateNightTask implements Consumer<ScheduledTask> {
 
     private final Harbor harbor;
     private final Checker checker;
@@ -20,11 +22,10 @@ public class AccelerateNightTask extends BukkitRunnable {
 
         harbor.getMessages().sendRandomChatMessage(world, "messages.chat.night-skipping");
         checker.clearWeather(world);
-        runTaskTimer(harbor, 1, 1);
     }
 
     @Override
-    public void run() {
+    public void accept(ScheduledTask task) {
         Config config = harbor.getConfiguration();
 
         long time = world.getTime();
@@ -42,7 +43,7 @@ public class AccelerateNightTask extends BukkitRunnable {
             }
 
             checker.resetStatus(world);
-            cancel();
+            task.cancel();
             return;
         }
 

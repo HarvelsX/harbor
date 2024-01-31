@@ -1,12 +1,12 @@
 package xyz.nkomarn.harbor.task;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Pose;
 import org.bukkit.metadata.MetadataValue;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import xyz.nkomarn.harbor.Harbor;
 import xyz.nkomarn.harbor.api.ExclusionProvider;
@@ -18,10 +18,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static java.util.stream.Collectors.toList;
 
-public class Checker extends BukkitRunnable {
+public class Checker implements Consumer<ScheduledTask> {
     private final Set<ExclusionProvider> providers;
     private final Harbor harbor;
     private final Set<UUID> skippingWorlds;
@@ -43,14 +45,7 @@ public class Checker extends BukkitRunnable {
         // Default to 1 if its invalid
         if (interval <= 0)
             interval = 1;
-        runTaskTimerAsynchronously(harbor, 0L, interval * 20L);
-    }
-
-    @Override
-    public void run() {
-        Bukkit.getWorlds().stream()
-                .filter(this::validateWorld)
-                .forEach(this::checkWorld);
+        Bukkit.getAsyncScheduler().runAtFixedRate(harbor, this, 0L, interval, TimeUnit.SECONDS);
     }
 
     /**
@@ -99,7 +94,7 @@ public class Checker extends BukkitRunnable {
             }
 
             if (config.getBoolean("night-skip.instant-skip")) {
-                Bukkit.getScheduler().runTask(harbor, () -> {
+                Bukkit.getGlobalRegionScheduler().run(harbor, (task) -> {
                     world.setTime(config.getInteger("night-skip.daytime-ticks"));
                     clearWeather(world);
                     resetStatus(world);
@@ -108,7 +103,7 @@ public class Checker extends BukkitRunnable {
             }
 
             skippingWorlds.add(world.getUID());
-            new AccelerateNightTask(harbor, this, world);
+            Bukkit.getGlobalRegionScheduler().runAtFixedRate(harbor, new AccelerateNightTask(harbor, this, world), 1, 1);
         }
     }
 
@@ -242,7 +237,7 @@ public class Checker extends BukkitRunnable {
      */
     public void forceSkip(@NotNull World world) {
         skippingWorlds.add(world.getUID());
-        new AccelerateNightTask(harbor, this, world);
+        Bukkit.getGlobalRegionScheduler().runAtFixedRate(harbor, new AccelerateNightTask(harbor, this, world), 1, 1);
     }
 
     /**
@@ -252,7 +247,7 @@ public class Checker extends BukkitRunnable {
      */
     public void resetStatus(@NotNull World world) {
         wakeUpPlayers(world);
-        harbor.getServer().getScheduler().runTaskLater(harbor, () -> {
+        harbor.getServer().getGlobalRegionScheduler().runDelayed(harbor, (task) -> {
             skippingWorlds.remove(world.getUID());
             harbor.getPlayerManager().clearCooldowns();
             harbor.getMessages().sendRandomChatMessage(world, "messages.chat.night-skipped");
@@ -296,7 +291,7 @@ public class Checker extends BukkitRunnable {
      */
     public void ensureMain(@NotNull Runnable runnable) {
         if (!Bukkit.isPrimaryThread()) {
-            Bukkit.getScheduler().runTask(harbor, runnable);
+            Bukkit.getGlobalRegionScheduler().run(harbor, task -> runnable.run());
         } else {
             runnable.run();
         }
@@ -315,5 +310,12 @@ public class Checker extends BukkitRunnable {
      */
     public void removeExclusionProvider(ExclusionProvider provider) {
         providers.remove(provider);
+    }
+
+    @Override
+    public void accept(ScheduledTask task) {
+        Bukkit.getWorlds().stream()
+                .filter(this::validateWorld)
+                .forEach(this::checkWorld);
     }
 }
